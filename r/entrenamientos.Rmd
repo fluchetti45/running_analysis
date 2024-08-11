@@ -8,7 +8,7 @@ output: html_document
 A continuacion una exploracion de los datos que brinda Garmin de mis entrenamientos.
 La informacion la obtuve de la pagina de **Garmin Connect**, una aplicacion que almacena los entrenamientos con la informacion de cada uno. Para trabajar con estos datos importo algunos paquetes que seran utiles.
 
- - ***tidyverse***: escensial para todo el proceso de ETL.
+ - ***tidyverse***: esencial para todo el proceso de ETL.
  - ***janitor***: util para ahorrar tiempo en la limpieza de datos.
  - ***lubridate***: para trabajar con fechas.
 
@@ -51,7 +51,7 @@ act |>
   summarize(n = n())
 ```
 
-Hay 4 tipos de actividades, aunque las de carrear (correr) son las que predominan y con las que vamos a trabajar.
+Hay 4 tipos de actividades, aunque las de carrera (correr) son las que predominan y con las que vamos a trabajar.
 Extraigo las carreras y las guardo en otro data frame.
 ``` {r}
 # run <- filter(act, tipo_de_actividad == "Carrera")
@@ -78,24 +78,33 @@ Algunos cambios a realizar son:
  - A *number*: distancia, calorias, altura_minima, altura_maxima, ascenso_total, descenso_total
  - A *time*: tiempo, tiempo_en_movimiento, tiempo_transcurrido.
 
-Como todas las columnas que quiero pasar a number se almacenaron como strings, realizo los cambios usando la funcion *parse_number* de readr. Va a ocurrir un error al querer convertir descenso_total.
-``` {r}
+Como todas las columnas que quiero pasar a number se almacenaron como strings, realizo los cambios usando la funcion *parse_number* de readr.
+
+Va a ocurrir un error al querer convertir descenso_total.
+
+``` {r, warning=TRUE, message=FALSE}
 parse_number(run$descenso_total)
 ```
+
 Como es un solo registro, lo cambio de forma manual.
+
 ``` {r}
 run[run$descenso_total=="--","descenso_total"] <- "0"
 ```
+
 Y ahora si reemplazo los tipos de datos. Podria hacerlo una por una, pero como son varias y todas van a sufrir la misma transformacion lo hago con las funciones **mutate** y **across** del paquete dplyr.
+
 ``` {r, message=FALSE, warning=FALSE}
 to_number <- c("distancia","calorias","altura_minima","altura_maxima","ascenso_total","descenso_total")
 
 run <- run |>
-  mutate(across(to_number, parse_number))
+  mutate(across(all_of(to_number), parse_number))
 ```
 
 Para terminar con los cambios a number debo lidiar con los ritmos medios. Estos no se pueden parsear como vienen ya que en los strings hay un ":". Puedo reemplazarlos por un "." y hacerlos float.
+
 Uso **gsub** del paquete base. Reemplaza el primer string por el segundo en el vector que le pasamos.
+
 ``` {r}
 run$ritmo_medio <- parse_number(gsub(":",".",run$ritmo_medio))
 ```
@@ -103,11 +112,15 @@ run$ritmo_medio <- parse_number(gsub(":",".",run$ritmo_medio))
 Agrego el anio, mes, dia y dia de la semana para cada carrera. Los extraigo de la fecha, que ya es datetime, con funciones de lubridate. Primero se van a crear las columnas, luego debo extraelas para asignarlas donde corresponde.
 
 ``` {r, message=FALSE, warning=FALSE}
+
 run[,c("anio","mes","dia","dia_semana")] <- run |>
-  mutate(anio = year(fecha), mes = month(fecha), dia = day(fecha), dia_semana = weekdays(run$fecha)) |>
+  mutate(anio = year(fecha), mes = month(fecha, label=TRUE), dia = day(fecha), dia_semana = weekdays(run$fecha)) |>
   select(anio,mes,dia, dia_semana)
+
 ```
+
 Tambien agrego la hora del entrenamiento.
+
 ``` {r}
 run[,"hora"] <- parse_time(format(run$fecha, "%H:%M:%S"))
 ```
@@ -116,9 +129,10 @@ Ya casi tengo los datos para trabajar. Falta una cuestion. Pasar los datos categ
 
 ## Variables categoricas
 
-Las variables categoricas son aquellas que toman valores de un rango finito.
-Para nuestro caso, la variable **dia_semana** lo es.
+Las variables categoricas son aquellas que toman valores de un rango finito. Para nuestro caso, la variable **dia_semana** lo es.
+
 En R existe un tipo de dato, el **factor**, que sirve para trabajar con variables categoricas. Los factors son vectores que solo pueden contener valores predefinidos. En su base almacenan enteros y los mapean a niveles (levels) para representar su texto.
+
 
 ``` {r}
 sample(run$dia_semana, size = 10)
@@ -127,20 +141,13 @@ sample(run$dia_semana, size = 10)
 Para transofrmarla a factor usamos la funcion del paquete base. Debemos indicarle los levels que va a mapear.
 
 ``` {r}
-day_english <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-run$dia_semana <- factor(run$dia_semana, levels=day_english)
-head(run$dia_semana, n = 10)
-```
-
-Vamos a hacer lo mismo con **anio** y **mes** para poder visualizar mas facil luego.
-
-``` {r}
 run$anio <- factor(run$anio, levels = c("2023","2024"))
 
-meses <- c("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
-                                      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre")
+day_english <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
-run$mes <- factor(run$mes, levels = 1:12, labels = meses)
+run$dia_semana <- factor(run$dia_semana, levels=day_english, ordered = TRUE)
+
+head(run$dia_semana, n = 10)
 ```
 
 Ahora si podemos visualizar los datos.
@@ -150,6 +157,7 @@ Ahora si podemos visualizar los datos.
 Para graficar usamos el paquete ggplot que es parte del tidyverse. La forma en que se grafica es intuitiva, se va agregando una capa encima de otra en un lienzo.
 
 ### Cantidad de entrenamientos por anio
+
 Visualizemos de dos formas la cantidad de carreras segun anio. Con un grafico de barras y con un pie chart. Para ello agrupamos los datos por anio y contamos cuantas instancias quedan en cada grupo.
 
 ``` {r, warning=FALSE, message=FALSE}
@@ -256,7 +264,7 @@ Agosto 2023 fue el mes con mas kilometros. Es entendible, en ese mes estaba la m
 ``` {r}
 
 agosto_2023 <- run |>
-  filter(mes=="Agosto", anio==2023)
+  filter(mes=="Aug", anio==2023)
 
 # cantidad de entrenos agosto 2023
 count_agosto2023 <- agosto_2023 |>
@@ -284,13 +292,16 @@ Algunos datos de Agosto 2023.
  - Promedio kilometros por entrenamiento `r round(km_agosto2023,2)`
 
 ``` {r}
-ggplot(agosto_2023, aes(x=0, y=distancia)) + geom_boxplot()
+ggplot(agosto_2023, aes(x=0, y=distancia)) + geom_boxplot() + geom_jitter(width = 0, size=2, alpha=0.5) +
+  labs(title='Boxplot distancia Agosto 2023', x='Agosto 2023', y='Distancia')
 ```
 
 Separo por dia de la semana.
 
 ``` {r}
-ggplot(agosto_2023, aes(x=dia_semana, y=distancia, fill=dia_semana)) + geom_boxplot() 
+ggplot(agosto_2023, aes(x=dia_semana, y=distancia, fill=dia_semana)) + geom_boxplot() + geom_jitter(width = 0) +
+  labs(title='Boxplot distancia por dia Agosto 2023',x='Dia',y='Distancia',fill='Dia de la semana', caption = 'Los viernes no se entrena') +
+  theme(axis.text.x = element_text(angle = 45)) 
 ```
 
 Y ahora veo la semana con mas kilometros.
@@ -302,13 +313,13 @@ run |>
 max_km_per_week <- run |>
   filter(fecha>=as.Date("07/08/23", "%d/%m/%y"), fecha<=as.Date("13/08/23", "%d/%m/%y")) |>
   summarize(total_km = sum(distancia))
-
-
 ```
+
 Dando un total de `r max_km_per_week`km.
 
 
 ### Entrenamientos por dia de semana
+
 En el anio 2023 solia entrenar 4 dias a la semana. Lunes-Martes-Jueves-Sabado.
 En la mayoria del 2024 entreno 3 dias por semana. Miercoles-Viernes-Domingo.
 Veamos si esto se refleja.
@@ -321,6 +332,7 @@ count_per_week_day <- run |>
   group_by(dia_semana) |>
   summarize(cantidad = n())
 
+
 ggplot(count_per_week_day, aes(x=dia_semana, y = cantidad, fill = dia_semana)) + geom_bar(stat="identity") +
   geom_text(aes(label = cantidad), vjust=2) +
   labs(title = "Entrenamientos segun dia", subtitle = "Periodo [2023-2024]", x = "Dia", y = "Cantidad", fill = "Dia") +
@@ -331,6 +343,7 @@ ggplot(count_per_week_day, aes(x=dia_semana, y = cantidad, fill = dia_semana)) +
 Ahora distinguimos segun anio. Agrupamos por dia de semana y anio.
 
 ``` {r, warning=FALSE, message=FALSE}
+
 count_per_week_day_year <- run |>
   group_by(dia_semana, anio) |>
   summarize(cantidad = n())
@@ -342,16 +355,65 @@ ggplot(count_per_week_day_year, aes(x=dia_semana, y = cantidad, fill = anio)) + 
 
 ```
 
+O sin stackear
+
+```{r, warning=FALSE, message=FALSE}
+
+ggplot(count_per_week_day_year, aes(x=dia_semana, y = cantidad, fill = anio)) + geom_bar(stat="identity", position = "dodge") +
+  geom_text(aes(label = cantidad),position=position_dodge(width=0.9), vjust=-0.25) + 
+  labs(title = "Entrenamientos segun dia y anio", x = "Dia", y = "Cantidad", fill = "Dia") +
+  theme(axis.text.x = element_text(angle = 45))
+
+```
 
 # Tiempos
 
 Veamos el tiempo que le dedico a entrenar.
 
 ``` {r}
-ggplot(run, aes(x=fecha,y=tiempo, colour=anio)) + geom_line() + geom_point(size=1)
+ggplot(run, aes(x=fecha,y=tiempo)) + geom_line() + geom_point(size=1)
 ```
 
-Que podemos ver de esta serie?
+Separemos la serie en dia de la semana.
+
+``` {r}
+ggplot(run, aes(x=fecha,y=tiempo)) + geom_line(aes(color=dia_semana)) + geom_point(size=0.6)
+```
+
+Asi como estan no se puede ver mucho, el paquete **Plotly** permite crear graficos interactivos donde podemos hacer zoom a partes de la serie e incluso desactivarlas a gusto. Creamos las mismas dos series con Plotly.
+
+
+``` {r, warning=FALSE,message=FALSE}
+library('plotly')
+
+run$tiempo_minutos <- round(period_to_seconds(hms(run$tiempo)) / 60,digits=2)
+
+fig <- plot_ly(run, x = ~fecha, y = ~tiempo_minutos,color=~anio ,type = 'scatter', mode = 'lines+markers') |>
+  layout(title = "Serie de tiempo duracion de entrenamientos",
+         xaxis = list(title = "Fecha"),
+         yaxis = list(title = "Duracion (minutos)"))
+fig
+```
+
+Separadas por dia de la semana. Algo interesante es que al poder desactivar series a gusto en esta podemos prender de la forma en que distribuia los entrenamientos:
+
+- Monday-Tuesday-Thursday-Saturday
+- Wednesday-Friday-Sunday
+
+Esto permite ver que los entrenamientos del fin de semana suelen ser mas largos.
+
+``` {r}
+fig <- plot_ly(run, x = ~fecha, y = ~tiempo_minutos, color = ~dia_semana ,type = 'scatter', mode = 'lines+markers') |>
+  layout(title = "Serie de tiempo duracion de entrenamientos",
+         xaxis = list(title = "Fecha"),
+         yaxis = list(title = "Duracion (minutos)"))
+
+fig
+
+```
+
+
+Que podemos ver de estas series?
 
  - La mayoria de los entrenamientos rondan la hora de duracion.
  - La carrera mas larga dura casi 4 horas.
@@ -372,7 +434,7 @@ Ocurre que los sabados previos a una carrera se hace algo llamado "activacion". 
 
 ``` {r}
 outliers_time |>
-  filter(dia_semana=="sábado") |>
+  filter(dia_semana=="Saturday") |>
   select(titulo, tiempo, fecha, dia_semana, distancia)
 
 ```
@@ -381,7 +443,7 @@ Se registran 3 fondos largos y otras tres actividades cortas, veamos si el dia s
 
 ``` {r}
 fechas <- outliers_time |>
-  filter(dia_semana=="sábado", tiempo <= min_time) |>
+  filter(dia_semana=="Saturday", tiempo <= min_time) |>
   select(fecha)
 
 # Paso al proximo dia.
@@ -400,7 +462,7 @@ Busquemos tambien entrenamientos largos de domingo, puede que sean carreras, com
 ``` {r}
 
 outliers_time |>
-  filter(dia_semana=="domingo") |>
+  filter(dia_semana=="Sunday") |>
   select(titulo, tiempo, fecha, dia_semana, distancia)
 
 ```
@@ -411,7 +473,7 @@ Finalmente veamos durante la semana.
 
 ``` {r}
 outliers_time |>
-  filter(dia_semana!="domingo",dia_semana!="sábado" ) |>
+  filter(dia_semana!="Sunday",dia_semana!="Saturday" ) |>
   select(titulo, tiempo, fecha, dia_semana, distancia, ritmo_medio)
 ```
 

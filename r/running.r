@@ -13,8 +13,8 @@ colnames(act)
 colnames(act) <- colnames(clean_names(act))
 
 # Veo que tipos de actividades hay registradas.
-act %>%
-  group_by(tipo_de_actividad) %>%
+act |>
+  group_by(tipo_de_actividad) |>
   summarize(n = n())
 
 # Me quedo solo con las de running.
@@ -22,7 +22,7 @@ run <- filter(act, tipo_de_actividad == "Carrera")
 run
 
 # Me quedo con columnas de interes.
-run <- run %>%
+run <- run |>
   select(2,4:9,12,14:15,38:41)
 colnames(run)
 
@@ -38,6 +38,8 @@ parse_number(run$calorias)
 parse_number(run$altura_minima)
 parse_number(run$altura_maxima)
 parse_number(run$ascenso_total)
+
+#La siguiente arroja error.
 parse_number(run$descenso_total)
 
 # Reviso. Dice que recibio --. En ese caso, lo cambio a mano.
@@ -48,11 +50,12 @@ run[run$descenso_total=="--","descenso_total"] <- "0"
 
 #Ahora si, reemplazo los tipos de datos de esas columnas.
 to_number <- c("distancia","calorias","altura_minima","altura_maxima","ascenso_total","descenso_total")
+
 run |>
-  mutate(across(to_number, parse_number))
+  mutate(across(all_of(to_number), parse_number))
 
 run <- run |>
-  mutate(across(to_number, parse_number))
+  mutate(across(all_of(to_number), parse_number))
 
 # Me queda transformar los ritmos medios de str a double. Primero reemplazo el ":" por ".", despues parseo.
 
@@ -60,7 +63,7 @@ run$ritmo_medio <- parse_number(gsub(":",".",run$ritmo_medio))
 
 glimpse(run)
 
-# Agrego el anio, el mes y el dia para cada activdad. Los extraigo de la fecha.
+# Agrego el anio, el mes y el dia para cada activdad. Los extraigo de la fecha. Esto seria:
 
 run |>
   mutate(anio = year(fecha), mes = month(fecha), dia = day(fecha)) |>
@@ -68,8 +71,14 @@ run |>
 
 # Creo las columnas y le asigno los valores.
 
+weekdays(run$fecha)
+
+# Factor ordenado por mes
+month(run$fecha, label=TRUE) 
+
+
 run[,c("anio","mes","dia","dia_semana")] <- run |>
-  mutate(anio = year(fecha), mes = month(fecha), dia = day(fecha), dia_semana = weekdays(run$fecha)) |>
+  mutate(anio = year(fecha), mes = month(fecha, label=TRUE), dia = day(fecha), dia_semana = weekdays(run$fecha)) |>
   select(anio,mes,dia, dia_semana)
 
 # Tambien agrego la hora.
@@ -77,6 +86,7 @@ run[,c("anio","mes","dia","dia_semana")] <- run |>
 run |>
   mutate(hora = format(fecha, "%H:%M:%S")) |>
   select(hora)
+
 
 run[,"hora"] <- parse_time(format(run$fecha, "%H:%M:%S"))
 
@@ -87,14 +97,10 @@ run$anio <- factor(run$anio, levels = c("2023","2024"))
 
 day_english <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
-run$dia_semana <- factor(run$dia_semana, levels=day_english)
-
-run$mes <- factor(run$mes, levels = 1:12, labels = c("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
-                                                     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"))
+run$dia_semana <- factor(run$dia_semana, levels=day_english, ordered = TRUE)
 
 
 # ------- VIS --------
-
 
 
 # Cantidad de entrenamientos segun anio
@@ -168,10 +174,13 @@ ggplot(km_per_year_month, aes(x=mes, y = kilometros, fill = anio)) + geom_bar(st
   labs(title = "Kilometros por mes y anio",fill="Anio",x="Mes",y="Kilometros") + 
   theme(axis.text.x = element_text(angle = 45))
 
+###### AGOSTO 2023 ------
+
 # Veamos Agosto de 2023. Hay 17 entrenamientos.
 
+
 agosto_2023 <- run |>
-  filter(mes=="Agosto", anio==2023)
+  filter(mes=="Aug", anio==2023)
 
 # cantidad de entrenos agosto 2023
 count_agosto2023 <- agosto_2023 |>
@@ -190,9 +199,14 @@ km_agosto2023 <- agosto_2023 |>
   summarize(kilometros = mean(distancia))
 
 agosto_2023
-# Boxplot de distancia. INTERPRETACION.
-ggplot(agosto_2023, aes(x=0, y=distancia)) + geom_boxplot()
-ggplot(agosto_2023, aes(x=dia_semana, y=distancia, fill=dia_semana)) + geom_boxplot()
+# Boxplot de distancia.
+
+ggplot(agosto_2023, aes(x=0, y=distancia)) + geom_boxplot() + geom_jitter(width = 0, size=2, alpha=0.5) +
+  labs(title='Boxplot distancia Agosto 2023', x='Agosto 2023', y='Distancia')
+
+ggplot(agosto_2023, aes(x=dia_semana, y=distancia, fill=dia_semana)) + geom_boxplot() + geom_jitter(width = 0) +
+  labs(title='Boxplot distancia por dia Agosto 2023',x='Dia',y='Distancia',fill='Dia de la semana', caption = 'Los viernes no se entrena') +
+  theme(axis.text.x = element_text(angle = 45))
 
 # Semana con mas kilometros
 
@@ -200,18 +214,12 @@ run |>
   filter(fecha>=as.Date("07/08/23", "%d/%m/%y"), fecha<=as.Date("13/08/23", "%d/%m/%y")) |>
   select(distancia, dia_semana)
 
-filter(agosto_2023, dia_semana=="sábado")
-agosto_2023$dia_semana
-
 
 # Kilometros en esa semana
 run |>
   filter(fecha>=as.Date("07/08/23", "%d/%m/%y"), fecha<=as.Date("13/08/23", "%d/%m/%y")) |>
   summarize(total_km = sum(distancia))
 
-
-run$fecha >= as.Date("12/08/23", "%d/%m/%y")
-run$fecha
 
 # Cantidad de entrenamientos segun dia de la semana
 # Por dia
@@ -231,20 +239,23 @@ count_per_week_day_year <- run |>
   group_by(dia_semana, anio) |>
   summarize(cantidad = n())
 
+# Stackeado
+
 ggplot(count_per_week_day_year, aes(x=dia_semana, y = cantidad, fill = anio)) + geom_bar(stat="identity") +
   geom_text(aes(label = cantidad),position= position_stack(vjust= 0.5), size=4) + 
+  labs(title = "Entrenamientos segun dia y anio", x = "Dia", y = "Cantidad", fill = "Dia") +
+  theme(axis.text.x = element_text(angle = 45))
+
+# No stackeado
+
+ggplot(count_per_week_day_year, aes(x=dia_semana, y = cantidad, fill = anio)) + geom_bar(stat="identity", position = "dodge") +
+  geom_text(aes(label = cantidad),position=position_dodge(width=0.9), vjust=-0.25) + 
   labs(title = "Entrenamientos segun dia y anio", x = "Dia", y = "Cantidad", fill = "Dia") +
   theme(axis.text.x = element_text(angle = 45))
 
 
 
 
-
-# ----------- VIS TIEMPO ------
-# Serie de tiempo de duracion de entrenamientos..
-run$tiempo
-run$anio
-ggplot(run, aes(x=fecha,y=tiempo, colour=anio)) + geom_line() + geom_point(size=1)
 
 # Extraigo los "outliers". Duraciones mayores a hora y media o menores a 40 minutos.
 # Le doy margen de 5 minutos.
@@ -289,29 +300,48 @@ outliers_time |>
 
 # Varios son previos a entrenar con mi profesor, usaba los entrenos que me sugeria el reloj.
 
+
+
+# ----------- VIS TIEMPO ------
+
+# Time series con fecha y tiempo.
+
+ggplot(run, aes(x=fecha,y=tiempo, colour=anio)) + geom_line() + geom_point(size=1)
+
+# Ploteo multiples series, una para cada dia de la semana.
+
+ggplot(run, aes(x=fecha,y=tiempo)) + geom_line(aes(color=dia_semana)) + geom_point(size=0.6)
+
+# Con plotly. Graficos interactivos.
+
+library('plotly')
+
+run$tiempo_minutos <- round(period_to_seconds(hms(run$tiempo)) / 60,digits=2)
+
+fig <- plot_ly(run, x = ~fecha, y = ~tiempo_minutos, type = 'scatter', mode = 'lines+markers') |>
+  layout(title = "Serie de tiempo duracion de entrenamientos",
+         xaxis = list(title = "Fecha"),
+         yaxis = list(title = "Duracion (minutos)"))
+fig
+
+# Multiple, una para cada dia de la semana.
+
+fig <- plot_ly(run, x = ~fecha, y = ~tiempo_minutos, color = ~dia_semana ,type = 'scatter', mode = 'lines+markers') |>
+  layout(title = "Serie de tiempo duracion de entrenamientos",
+         xaxis = list(title = "Fecha"),
+         yaxis = list(title = "Duracion (minutos)"))
+# Aca se puede ver por parejas (Mon-Tues-Thurs-Sat y Wed-Fri-Sun) que los fin de semana se corre mas. 
+fig
+
+
+# ------ CORRELACIONES ----
 # Veamos si mas tiempo implica mas distancia.
 
 ggplot(run, aes(x=tiempo, y = distancia)) + geom_point(alpha=0.5) +
   labs(title="Tiempo en movimiento vs Distancia cubierta", x="Tiempo (hs)",y="Distancia (km)")
 
-# Tiempo promedio
 
 
 # Veamos si mas tiempo implica mas calorias.
 ggplot(run, aes(x=tiempo, y = calorias)) + geom_point(alpha=0.5) + geom_smooth(method=lm) +
   labs(title="Tiempo en movimiento vs calorias gastadas", x="Tiempo (hs)",y="Calorias")
-
-
-# Frec cardiaca
-
-ggplot(run, aes(x=fecha,y=frecuencia_cardiaca_media)) + geom_line()
-
-min(run$frecuencia_cardiaca_media)
-
-ggplot(run, aes(x=ritmo_medio)) + geom_histogram(binwidth = 0.7)
-
-run |>
-  filter(ritmo_medio < 5.0)
-
-run |>
-  filter(distancia>10.0 & distancia<10.4)
