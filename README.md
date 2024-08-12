@@ -11,11 +11,11 @@ Durante el proceso se cargan los datos, se los transforma y se realizan visualiz
 
 Para ver el analisis en R:
 
-[RMarkdown renderizado](https://htmlpreview.github.io/?https://github.com/fluchetti45/running_analysis/blob/main/r/entrenamientos.html)
+[RMarkdown renderizado](https://nbviewer.org/github/fluchetti45/running_analysis/blob/main/r/entrenamientos.html)
 
 Para verlo en Python:
 
-Ver la notebook dentro de la carpeta Python.
+[Jupyter Notebook](https://nbviewer.org/github/fluchetti45/running_analysis/blob/main/python/Entrenamientos.ipynb)
 
 
 ## Paquetes / librerias
